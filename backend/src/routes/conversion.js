@@ -10,15 +10,132 @@ router.post('/', streamUploadHandler, async (req, res) => {
   try {
     const filesMeta = req.filesMeta || [];
     if (!filesMeta.length) return res.status(400).json({ error: 'No files uploaded' });
-
+    const targetFormat = (req.body && req.body.targetFormat) ? req.body.targetFormat.toLowerCase() : 'pdf';
     const forceZip = (req.body && (req.body.zip === '1' || req.body.zip === 'true')) || (req.query.zip === '1');
+
+    // Apenas um arquivo
     if (filesMeta.length === 1) {
-      // Retorna PDF único
-      const pdfPath = await convertOneToPdf(filesMeta[0]);
-      res.setHeader('Content-Type', 'application/pdf');
-      const baseName = filesMeta[0].filename.replace(/\.[^.]+$/, '') + '.pdf';
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`);
-      return fs.createReadStream(pdfPath).pipe(res);
+      const meta = filesMeta[0];
+      // PDF para imagem
+      if ((targetFormat === 'jpg' || targetFormat === 'jpeg' || targetFormat === 'png') && meta.mimetype === 'application/pdf') {
+        // Usa pdftoppm para converter PDF em imagens
+  let ext = 'jpg';
+  let pdftoppmOpt = '-jpeg';
+  if (targetFormat === 'png') { ext = 'png'; pdftoppmOpt = '-png'; }
+  const { spawn } = await import('child_process');
+  const outPrefix = meta.filepath.replace(/\.pdf$/i, '');
+  const args = [pdftoppmOpt, meta.filepath, outPrefix];
+        await new Promise((resolve, reject) => {
+          console.log('[PDFTOPPM] Comando:', 'pdftoppm', args.join(' '));
+          const proc = spawn('pdftoppm', args);
+          let stderr = '';
+          proc.stderr && proc.stderr.on('data', d => { stderr += d.toString(); });
+          proc.on('error', (err) => {
+            console.error('[PDFTOPPM] Erro ao spawn:', err);
+            reject(err);
+          });
+          proc.on('exit', code => {
+            if (code === 0) return resolve();
+            console.error('[PDFTOPPM] Falha. Código:', code, 'Stderr:', stderr);
+            reject(new Error('pdftoppm failed: ' + stderr));
+          });
+        });
+        // Coleta todos os arquivos gerados
+  const pathMod = await import('path');
+  const dir = pathMod.dirname(meta.filepath);
+  const base = pathMod.basename(outPrefix);
+  const files = fs.readdirSync(dir).filter(f => f.startsWith(base) && f.endsWith('.'+ext));
+        if (!files.length) throw new Error('Nenhuma imagem gerada');
+        if (files.length === 1) {
+          res.setHeader('Content-Type', ext === 'png' ? 'image/png' : 'image/jpeg');
+          res.setHeader('Content-Disposition', `attachment; filename="${base}.${ext}"`);
+          return fs.createReadStream(pathMod.join(dir, files[0])).pipe(res);
+        } else {
+          // Compacta em zip
+          const archiver = (await import('archiver')).default;
+          const archive = archiver('zip', { zlib: { level: 6 } });
+          res.setHeader('Content-Type', 'application/zip');
+          res.setHeader('Content-Disposition', `attachment; filename="${base}_imagens.zip"`);
+          files.forEach(f => archive.file(pathMod.join(dir, f), { name: f }));
+          archive.finalize();
+          return archive.pipe(res);
+        }
+      }
+      // Imagem para JPG/PNG
+      if ((targetFormat === 'jpg' || targetFormat === 'jpeg' || targetFormat === 'png') && meta.mimetype.startsWith('image/')) {
+  const sharp = (await import('sharp')).default;
+  const ext = targetFormat === 'png' ? 'png' : 'jpg';
+  const pathMod = await import('path');
+  const outPath = meta.filepath.replace(/\.[^.]+$/, '') + '_converted.' + ext;
+  let img = sharp(meta.filepath);
+  if (ext === 'png') img = img.png();
+  else img = img.jpeg();
+  await img.toFile(outPath);
+  res.setHeader('Content-Type', ext === 'png' ? 'image/png' : 'image/jpeg');
+  res.setHeader('Content-Disposition', `attachment; filename="${meta.filename.replace(/\.[^.]+$/, '')}.${ext}"`);
+  return fs.createReadStream(outPath).pipe(res);
+      }
+      // PDF para docx/pptx/xlsx
+      if (['docx','pptx','xlsx'].includes(targetFormat) && meta.mimetype === 'application/pdf') {
+        // Usa LibreOffice para converter PDF para o formato desejado
+  const pathMod = await import('path');
+  const outDir = pathMod.dirname(meta.filepath);
+  const sofficeArgs = ['--headless', '--convert-to', targetFormat, '--outdir', outDir, meta.filepath];
+        const { spawn } = await import('child_process');
+        await new Promise((resolve, reject) => {
+          const proc = spawn('soffice', sofficeArgs);
+          proc.on('error', reject);
+          proc.on('exit', code => code === 0 ? resolve() : reject(new Error('soffice failed')));
+        });
+  const baseName = meta.filename.replace(/\.[^.]+$/, '') + '.' + targetFormat;
+  const outPath = pathMod.join(outDir, baseName);
+  if (!fs.existsSync(outPath)) {
+          return res.status(400).json({ error: `Falha ao converter PDF para ${targetFormat.toUpperCase()}` });
+        }
+        let contentType = 'application/octet-stream';
+        if (targetFormat === 'docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        if (targetFormat === 'pptx') contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        if (targetFormat === 'xlsx') contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`);
+        return fs.createReadStream(outPath).pipe(res);
+      }
+      // Office para PDF ou entre formatos Office
+      if ((['docx','pptx','xlsx'].includes(targetFormat) && meta.mimetype !== 'application/pdf') || (targetFormat === 'pdf' && ['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.presentationml.presentation','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(meta.mimetype))) {
+  const pathMod = await import('path');
+  const outDir = pathMod.dirname(meta.filepath);
+  const sofficeArgs = ['--headless', '--convert-to', targetFormat, '--outdir', outDir, meta.filepath];
+        const { spawn } = await import('child_process');
+        await new Promise((resolve, reject) => {
+          const proc = spawn('soffice', sofficeArgs);
+          proc.on('error', reject);
+          proc.on('exit', code => code === 0 ? resolve() : reject(new Error('soffice failed')));
+        });
+  const baseName = meta.filename.replace(/\.[^.]+$/, '') + '.' + targetFormat;
+  const outPath = pathMod.join(outDir, baseName);
+  if (!fs.existsSync(outPath)) {
+          return res.status(400).json({ error: `Falha ao converter para ${targetFormat.toUpperCase()}` });
+        }
+        let contentType = 'application/octet-stream';
+        if (targetFormat === 'pdf') contentType = 'application/pdf';
+        if (targetFormat === 'docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        if (targetFormat === 'pptx') contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        if (targetFormat === 'xlsx') contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`);
+        return fs.createReadStream(outPath).pipe(res);
+      }
+      // Para PDF (default ou imagem para PDF)
+      try {
+        const pdfPath = await convertOneToPdf(meta);
+        res.setHeader('Content-Type', 'application/pdf');
+        const baseName = meta.filename.replace(/\.[^.]+$/, '') + '.pdf';
+        res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`);
+        return fs.createReadStream(pdfPath).pipe(res);
+      } catch (err) {
+        console.error('Erro ao converter imagem para PDF:', err);
+        return res.status(400).json({ error: 'Falha ao converter imagem para PDF: ' + err.message });
+      }
     }
 
     // Múltiplos arquivos: se não for solicitado ZIP explicitamente, mescla em um único PDF
@@ -29,7 +146,7 @@ router.post('/', streamUploadHandler, async (req, res) => {
       return fs.createReadStream(mergedPath).pipe(res);
     }
 
-  // ZIP solicitado
+    // ZIP solicitado
     const zipStream = await convertManyToPdf(filesMeta);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="converted_pdfs.zip"');
@@ -40,7 +157,7 @@ router.post('/', streamUploadHandler, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Conversion failed' });
+    res.status(500).json({ error: 'Conversion failed: ' + err.message });
   }
 });
 
