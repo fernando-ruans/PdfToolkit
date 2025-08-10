@@ -1,0 +1,7 @@
+{
+  "env": { "browser": true, "es2022": true },
+  "extends": ["eslint:recommended", "plugin:react/recommended"],
+  "plugins": ["react"],
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module", "ecmaFeatures": { "jsx": true } },
+  "rules": { "react/react-in-jsx-scope": "off" }
+}

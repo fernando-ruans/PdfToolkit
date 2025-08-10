@@ -1,0 +1,7 @@
+/* Tailwind directives are processed by PostCSS in Vite build */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Utility class compiled by Tailwind at build time */
+.btn { @apply px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700; }
