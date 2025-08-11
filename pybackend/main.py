@@ -27,8 +27,10 @@ from fastapi.responses import HTMLResponse
 from starlette.requests import Request
 
 
-# Servir arquivos estáticos do frontend em /static
-app.mount("/static", StaticFiles(directory="../frontend/dist"), name="static")
+
+# Servir assets do Vite em /assets
+app.mount("/assets", StaticFiles(directory="../frontend/dist/assets"), name="assets")
+
 
 
 
@@ -41,10 +43,12 @@ async def root():
             return HTMLResponse(f.read(), status_code=200)
     return HTMLResponse(status_code=404, content="index.html não encontrado")
 
+
 # Fallback: servir index.html para qualquer GET não-API
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def spa_fallback(full_path: str):
-    if full_path.startswith("api/") or full_path.startswith("static/"):
+    # Não intercepta APIs nem assets
+    if full_path.startswith("api/") or full_path.startswith("assets/"):
         return HTMLResponse(status_code=404, content="Not Found")
     index_path = os.path.join(os.path.dirname(__file__), "../frontend/dist/index.html")
     if os.path.exists(index_path):
