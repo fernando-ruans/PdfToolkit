@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -20,6 +19,7 @@ const TOOL = {
 
 export default function PdfVisualEditor({ file, onSave }) {
   const [tool, setTool] = useState(TOOL.SELECT);
+  const [thumbnails, setThumbnails] = useState([]); // Array de miniaturas (dataURL)
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [pdfError, setPdfError] = useState(null);
@@ -49,6 +49,27 @@ export default function PdfVisualEditor({ file, onSave }) {
   function onDocumentLoadSuccess({ numPages }) {
     setNumPages(numPages);
     setPdfError(null);
+    // Gerar miniaturas das páginas
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const pdfData = new Uint8Array(e.target.result);
+        const pdf = await pdfjs.getDocument({ data: pdfData }).promise;
+        const thumbs = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 0.18 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          thumbs.push(canvas.toDataURL());
+        }
+        setThumbnails(thumbs);
+      };
+      reader.readAsArrayBuffer(file);
+    }
   }
 
   function onDocumentLoadError(error) {
@@ -59,6 +80,9 @@ export default function PdfVisualEditor({ file, onSave }) {
   // Adicionar texto: ao clicar, exibe input para digitar e adiciona elemento na posição
   const [addingText, setAddingText] = useState(null); // {x, y} ou null
   const [inputValue, setInputValue] = useState("");
+  // Seleção e movimentação de elementos
+  const [selectedIdx, setSelectedIdx] = useState(null); // índice do elemento selecionado
+  const [dragOffset, setDragOffset] = useState(null); // {dx, dy} para arrastar
 
   function getRelativeCoords(e) {
     const rect = containerRef.current.getBoundingClientRect();
@@ -72,6 +96,17 @@ export default function PdfVisualEditor({ file, onSave }) {
       const { x, y } = getRelativeCoords(e);
       setAddingText({ x, y });
       setInputValue("");
+    } else if (tool === TOOL.SELECT) {
+      // Selecionar elemento clicado
+      const { x, y } = getRelativeCoords(e);
+      // Verifica se clicou em algum elemento (texto, forma, highlight, etc)
+      const idx = elements.findIndex(el => el.page === pageNumber && (
+        (el.type === 'text' && x >= el.x && x <= el.x + 120 && y >= el.y && y <= el.y + 24) ||
+        (el.type === 'rect' && x >= el.x && x <= el.x + el.w && y >= el.y && y <= el.y + el.h) ||
+        (el.type === 'circle' && Math.pow(x - (el.x + el.w/2),2) / Math.pow(el.w/2,2) + Math.pow(y - (el.y + el.h/2),2) / Math.pow(el.h/2,2) <= 1) ||
+        (el.type === 'highlight' && x >= el.x && x <= el.x + el.w && y >= el.y && y <= el.y + el.h)
+      ));
+      setSelectedIdx(idx >= 0 ? idx : null);
     }
   }
 
@@ -89,6 +124,17 @@ export default function PdfVisualEditor({ file, onSave }) {
       setShapeStart({ x, y });
       setShapeRect({ x, y, w: 0, h: 0 });
       setDrawingShape(tool === TOOL.RECT ? 'rect' : 'circle');
+    } else if (tool === TOOL.SELECT && selectedIdx !== null) {
+      // Iniciar arrasto do elemento selecionado
+      const { x, y } = getRelativeCoords(e);
+      const el = elements[selectedIdx];
+      if (el && el.page === pageNumber) {
+        let dx = 0, dy = 0;
+        if (el.type === 'text') { dx = x - el.x; dy = y - el.y; }
+        else if (el.type === 'rect' || el.type === 'highlight') { dx = x - el.x; dy = y - el.y; }
+        else if (el.type === 'circle') { dx = x - (el.x + el.w/2); dy = y - (el.y + el.h/2); }
+        setDragOffset({ dx, dy });
+      }
     }
   }
 
@@ -112,6 +158,19 @@ export default function PdfVisualEditor({ file, onSave }) {
         w: Math.abs(x - shapeStart.x),
         h: Math.abs(y - shapeStart.y),
       });
+    } else if (tool === TOOL.SELECT && selectedIdx !== null && dragOffset) {
+      // Arrastar elemento selecionado
+      const { x, y } = getRelativeCoords(e);
+      setElements(els => els.map((el, idx) => {
+        if (idx !== selectedIdx || el.page !== pageNumber) return el;
+        if (el.type === 'text' || el.type === 'rect' || el.type === 'highlight') {
+          return { ...el, x: x - dragOffset.dx, y: y - dragOffset.dy };
+        } else if (el.type === 'circle') {
+          // Move centro
+          return { ...el, x: x - dragOffset.dx - el.w/2, y: y - dragOffset.dy - el.h/2 };
+        }
+        return el;
+      }));
     }
   }
 
@@ -138,6 +197,9 @@ export default function PdfVisualEditor({ file, onSave }) {
     setShapeStart(null);
     setShapeRect(null);
     setDrawingShape(null);
+    if (tool === TOOL.SELECT && dragOffset) {
+      setDragOffset(null);
+    }
   }
 
   function handleTextInputBlur() {
@@ -161,141 +223,168 @@ export default function PdfVisualEditor({ file, onSave }) {
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* Barra de ferramentas */}
-      <div className="flex gap-2 p-2 bg-gray-100 border-b items-center">
-        <button onClick={() => setTool(TOOL.SELECT)} title="Selecionar"><FaMousePointer /></button>
-        <button onClick={() => setTool(TOOL.TEXT)} title="Adicionar texto"><FaFont /></button>
-        <button onClick={() => setTool(TOOL.DRAW)} title="Desenhar à mão livre"><FaPen /></button>
-        <button onClick={() => setTool(TOOL.HIGHLIGHT)} title="Destacar"><FaHighlighter /></button>
-        <button onClick={() => setTool(TOOL.RECT)} title="Retângulo"><FaSquare /></button>
-        <button onClick={() => setTool(TOOL.CIRCLE)} title="Círculo"><FaCircle /></button>
-        <button
-          onClick={() => {
-            if (undoStack.length > 0) {
-              setRedoStack([elements, ...redoStack]);
-              setElements(undoStack[undoStack.length - 1]);
-              setUndoStack(undoStack.slice(0, -1));
-            }
-          }}
-          title="Desfazer"
-          disabled={undoStack.length === 0}
-        >
-          <FaUndo />
-        </button>
-        <button
-          onClick={() => {
-            if (redoStack.length > 0) {
-              setUndoStack([...undoStack, elements]);
-              setElements(redoStack[0]);
-              setRedoStack(redoStack.slice(1));
-            }
-          }}
-          title="Refazer"
-          disabled={redoStack.length === 0}
-        >
-          <FaRedo />
-        </button>
-        <button
-          onClick={async () => {
-            if (!file) return;
-            const arrayBuffer = await file.arrayBuffer();
-            const pdfDoc = await PDFDocument.load(arrayBuffer);
-            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            // Percorre páginas e aplica elementos
-            for (let i = 0; i < pdfDoc.getPageCount(); i++) {
-              const page = pdfDoc.getPage(i);
-              const pageElements = elements.filter(el => el.page === i + 1);
-              for (const el of pageElements) {
-                if (el.type === "text") {
-                  page.drawText(el.value, {
-                    x: el.x,
-                    y: page.getHeight() - el.y - 18, // Ajuste para coordenada PDF
-                    size: 18,
-                    font,
-                    color: rgb(0.13, 0.13, 0.13),
-                  });
-                } else if (el.type === "draw") {
-                  for (let j = 1; j < el.path.length; j++) {
-                    const p1 = el.path[j - 1];
-                    const p2 = el.path[j];
-                    page.drawLine({
-                      start: { x: p1.x, y: page.getHeight() - p1.y },
-                      end: { x: p2.x, y: page.getHeight() - p2.y },
-                      thickness: 2.5,
-                      color: rgb(0.10, 0.46, 0.82),
+  <div className="w-full h-full flex flex-col items-center justify-center">
+      {/* Barra de ferramentas fixa */}
+      <div className="sticky top-0 z-10 w-full flex justify-center bg-white/90 shadow-md border-b py-2 px-2 gap-2 rounded-b-xl backdrop-blur">
+        <div className="flex gap-1">
+          <button onClick={() => setTool(TOOL.SELECT)} title="Selecionar (V)" className={`rounded p-2 transition ${tool === TOOL.SELECT ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaMousePointer size={18} /></button>
+          <button onClick={() => setTool(TOOL.TEXT)} title="Adicionar texto (T)" className={`rounded p-2 transition ${tool === TOOL.TEXT ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaFont size={18} /></button>
+          <button onClick={() => setTool(TOOL.DRAW)} title="Desenhar à mão livre (D)" className={`rounded p-2 transition ${tool === TOOL.DRAW ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaPen size={18} /></button>
+          <button onClick={() => setTool(TOOL.HIGHLIGHT)} title="Destacar (H)" className={`rounded p-2 transition ${tool === TOOL.HIGHLIGHT ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaHighlighter size={18} /></button>
+          <button onClick={() => setTool(TOOL.RECT)} title="Retângulo (R)" className={`rounded p-2 transition ${tool === TOOL.RECT ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaSquare size={18} /></button>
+          <button onClick={() => setTool(TOOL.CIRCLE)} title="Círculo (C)" className={`rounded p-2 transition ${tool === TOOL.CIRCLE ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaCircle size={18} /></button>
+        </div>
+        <div className="flex gap-1 ml-4">
+          <button
+            onClick={() => {
+              if (undoStack.length > 0) {
+                setRedoStack([elements, ...redoStack]);
+                setElements(undoStack[undoStack.length - 1]);
+                setUndoStack(undoStack.slice(0, -1));
+              }
+            }}
+            title="Desfazer"
+            disabled={undoStack.length === 0}
+            className="rounded p-2 transition hover:bg-gray-100 disabled:opacity-40"
+          >
+            <FaUndo size={18} />
+          </button>
+          <button
+            onClick={() => {
+              if (redoStack.length > 0) {
+                setUndoStack([...undoStack, elements]);
+                setElements(redoStack[0]);
+                setRedoStack(redoStack.slice(1));
+              }
+            }}
+            title="Refazer"
+            disabled={redoStack.length === 0}
+            className="rounded p-2 transition hover:bg-gray-100 disabled:opacity-40"
+          >
+            <FaRedo size={18} />
+          </button>
+          <button
+            onClick={async () => {
+              if (!file) return;
+              const arrayBuffer = await file.arrayBuffer();
+              const pdfDoc = await PDFDocument.load(arrayBuffer);
+              const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+              // Percorre páginas e aplica elementos
+              for (let i = 0; i < pdfDoc.getPageCount(); i++) {
+                const page = pdfDoc.getPage(i);
+                const pageElements = elements.filter(el => el.page === i + 1);
+                for (const el of pageElements) {
+                  if (el.type === "text") {
+                    page.drawText(el.value, {
+                      x: el.x,
+                      y: page.getHeight() - el.y - 18, // Ajuste para coordenada PDF
+                      size: 18,
+                      font,
+                      color: rgb(0.13, 0.13, 0.13),
+                    });
+                  } else if (el.type === "draw") {
+                    for (let j = 1; j < el.path.length; j++) {
+                      const p1 = el.path[j - 1];
+                      const p2 = el.path[j];
+                      page.drawLine({
+                        start: { x: p1.x, y: page.getHeight() - p1.y },
+                        end: { x: p2.x, y: page.getHeight() - p2.y },
+                        thickness: 2.5,
+                        color: rgb(0.10, 0.46, 0.82),
+                      });
+                    }
+                  } else if (el.type === "highlight") {
+                    page.drawRectangle({
+                      x: el.x,
+                      y: page.getHeight() - el.y - el.h,
+                      width: el.w,
+                      height: el.h,
+                      color: rgb(1, 0.96, 0.62),
+                      opacity: 0.5,
+                      borderColor: rgb(1, 0.99, 0.91),
+                      borderWidth: 1,
+                    });
+                  } else if (el.type === "rect") {
+                    page.drawRectangle({
+                      x: el.x,
+                      y: page.getHeight() - el.y - el.h,
+                      width: el.w,
+                      height: el.h,
+                      color: rgb(0.56, 0.79, 0.98),
+                      opacity: 0.3,
+                      borderColor: rgb(0.10, 0.46, 0.82),
+                      borderWidth: 2,
+                    });
+                  } else if (el.type === "circle") {
+                    // Aproxima círculo por elipse
+                    page.drawEllipse({
+                      x: el.x + el.w / 2,
+                      y: page.getHeight() - el.y - el.h / 2,
+                      xScale: Math.abs(el.w / 2),
+                      yScale: Math.abs(el.h / 2),
+                      color: rgb(0.65, 0.84, 0.65),
+                      opacity: 0.3,
+                      borderColor: rgb(0.22, 0.56, 0.24),
+                      borderWidth: 2,
                     });
                   }
-                } else if (el.type === "highlight") {
-                  page.drawRectangle({
-                    x: el.x,
-                    y: page.getHeight() - el.y - el.h,
-                    width: el.w,
-                    height: el.h,
-                    color: rgb(1, 0.96, 0.62),
-                    opacity: 0.5,
-                    borderColor: rgb(1, 0.99, 0.91),
-                    borderWidth: 1,
-                  });
-                } else if (el.type === "rect") {
-                  page.drawRectangle({
-                    x: el.x,
-                    y: page.getHeight() - el.y - el.h,
-                    width: el.w,
-                    height: el.h,
-                    color: rgb(0.56, 0.79, 0.98),
-                    opacity: 0.3,
-                    borderColor: rgb(0.10, 0.46, 0.82),
-                    borderWidth: 2,
-                  });
-                } else if (el.type === "circle") {
-                  // Aproxima círculo por elipse
-                  page.drawEllipse({
-                    x: el.x + el.w / 2,
-                    y: page.getHeight() - el.y - el.h / 2,
-                    xScale: Math.abs(el.w / 2),
-                    yScale: Math.abs(el.h / 2),
-                    color: rgb(0.65, 0.84, 0.65),
-                    opacity: 0.3,
-                    borderColor: rgb(0.22, 0.56, 0.24),
-                    borderWidth: 2,
-                  });
                 }
               }
-            }
-            const pdfBytes = await pdfDoc.save();
-            const blob = new Blob([pdfBytes], { type: "application/pdf" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "editado.pdf";
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            }, 100);
-          }}
-          title="Salvar"
-          disabled={!file}
-        >
-          <FaSave />
-        </button>
-        <span className="ml-4 text-gray-500">Ferramenta: {tool}</span>
+              const pdfBytes = await pdfDoc.save();
+              const blob = new Blob([pdfBytes], { type: "application/pdf" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "editado.pdf";
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }, 100);
+            }}
+            title="Salvar"
+            disabled={!file}
+            className="rounded p-2 transition bg-green-500 text-white hover:bg-green-600 shadow"
+          >
+            <FaSave size={18} />
+          </button>
+        </div>
+        <span className="ml-6 text-gray-500 font-medium">Ferramenta: <span className="capitalize text-blue-700">{tool}</span></span>
       </div>
-      {/* Área de edição */}
+      {/* Área de edição centralizada com fundo quadriculado e sombra */}
       <div
-        className="flex-1 relative bg-gray-200 overflow-auto"
-        ref={containerRef}
-        style={{ minHeight: 500 }}
-        onClick={handlePdfClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        tabIndex={0}
-        role="presentation"
+        className="flex-1 w-full flex justify-center items-center bg-gradient-to-br from-blue-50 via-white to-purple-50 py-6 px-2 overflow-auto"
+        style={{ minHeight: 600 }}
       >
+        <div className="relative rounded-2xl shadow-2xl border bg-[conic-gradient(at_top_left,_var(--tw-gradient-stops))] from-white via-blue-50 to-purple-50 p-2 flex" style={{ minWidth: 350, maxWidth: 950, width: '100%' }}>
+          {/* Miniaturas de páginas */}
+          {thumbnails.length > 1 && (
+            <div className="flex flex-col items-center gap-2 py-2 px-1 bg-white/80 border-r rounded-l-2xl shadow h-full min-w-[60px] max-w-[70px] z-10">
+              {thumbnails.map((thumb, idx) => (
+                <button
+                  key={idx}
+                  className={`rounded-lg border-2 ${pageNumber === idx + 1 ? 'border-blue-500 shadow-lg' : 'border-transparent'} overflow-hidden focus:outline-none`}
+                  style={{ width: 44, height: 62, background: '#f3f4f6' }}
+                  onClick={() => setPageNumber(idx + 1)}
+                  title={`Ir para página ${idx + 1}`}
+                >
+                  <img src={thumb} alt={`Miniatura página ${idx + 1}`} className="w-full h-full object-contain" />
+                </button>
+              ))}
+            </div>
+          )}
+          <div
+            ref={containerRef}
+            className="relative w-full h-full min-h-[500px] bg-[repeating-linear-gradient(0deg,_#e0e7ef_0px,_#e0e7ef_20px,_#f8fafc_20px,_#f8fafc_40px)] rounded-xl overflow-hidden border shadow"
+            onClick={handlePdfClick}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            tabIndex={0}
+            role="presentation"
+          >
         <Document
           file={file}
           onLoadSuccess={onDocumentLoadSuccess}
@@ -321,13 +410,53 @@ export default function PdfVisualEditor({ file, onSave }) {
           {elements.filter(el => el.type === "text" && el.page === pageNumber).map((el, idx) => (
             <div
               key={"text-"+idx}
-              style={{ position: "absolute", left: el.x, top: el.y, color: "#222", fontSize: 18, background: "rgba(255,255,255,0.7)", padding: "1px 4px", borderRadius: 2 }}
+              style={{ position: "absolute", left: el.x, top: el.y, color: "#222", fontSize: 18, background: "rgba(255,255,255,0.7)", padding: "1px 4px", borderRadius: 2,
+                outline: (tool === TOOL.SELECT && selectedIdx === elements.findIndex((e, i) => i === idx && e.page === pageNumber && e.type === 'text')) ? '2px solid #2563eb' : 'none',
+                zIndex: (tool === TOOL.SELECT && selectedIdx === elements.findIndex((e, i) => i === idx && e.page === pageNumber && e.type === 'text')) ? 10 : 1
+              }}
+              onClick={e => { e.stopPropagation(); setSelectedIdx(elements.findIndex((e, i) => i === idx && e.page === pageNumber && e.type === 'text')); }}
             >
               {el.value}
             </div>
           ))}
           {/* Renderizar desenhos à mão livre, destaques e formas na página atual */}
           <svg className="absolute top-0 left-0 w-full h-full" style={{ pointerEvents: "none" }}>
+            {/* Handles para redimensionamento de elementos selecionados */}
+            {tool === TOOL.SELECT && selectedIdx !== null && (() => {
+              const el = elements[selectedIdx];
+              if (!el || el.page !== pageNumber) return null;
+              if (el.type === 'rect' || el.type === 'highlight') {
+                return [
+                  <circle key="handle-tl" cx={el.x} cy={el.y} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-tr" cx={el.x+el.w} cy={el.y} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-bl" cx={el.x} cy={el.y+el.h} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-br" cx={el.x+el.w} cy={el.y+el.h} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />
+                ];
+              } else if (el.type === 'circle') {
+                return [
+                  <circle key="handle-c" cx={el.x+el.w} cy={el.y+el.h/2} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />
+                ];
+              }
+              return null;
+            })()}
+            {/* Handles para redimensionamento de elementos selecionados */}
+            {tool === TOOL.SELECT && selectedIdx !== null && (() => {
+              const el = elements[selectedIdx];
+              if (!el || el.page !== pageNumber) return null;
+              if (el.type === 'rect' || el.type === 'highlight') {
+                return [
+                  <circle key="handle-tl" cx={el.x} cy={el.y} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-tr" cx={el.x+el.w} cy={el.y} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-bl" cx={el.x} cy={el.y+el.h} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />,
+                  <circle key="handle-br" cx={el.x+el.w} cy={el.y+el.h} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />
+                ];
+              } else if (el.type === 'circle') {
+                return [
+                  <circle key="handle-c" cx={el.x+el.w} cy={el.y+el.h/2} r={6} fill="#fff" stroke="#2563eb" strokeWidth={2} />
+                ];
+              }
+              return null;
+            })()}
             {/* Destaques */}
             {elements.filter(el => el.type === "highlight" && el.page === pageNumber).map((el, idx) => (
               <rect
@@ -435,12 +564,13 @@ export default function PdfVisualEditor({ file, onSave }) {
         {addingText && (
           <input
             autoFocus
-            className="absolute z-10 border border-blue-400 rounded px-1 py-0.5 text-base bg-white"
-            style={{ left: addingText.x, top: addingText.y, minWidth: 40 }}
+            className="absolute z-10 border border-blue-400 rounded px-1 py-0.5 text-base bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none shadow-lg transition-all"
+            style={{ left: addingText.x, top: addingText.y, minWidth: 40, maxWidth: 220 }}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onBlur={handleTextInputBlur}
             onKeyDown={handleTextInputKeyDown}
+            placeholder="Digite o texto e pressione Enter"
           />
         )}
         {/* Paginação */}
@@ -451,6 +581,8 @@ export default function PdfVisualEditor({ file, onSave }) {
             <button disabled={pageNumber >= numPages} onClick={() => setPageNumber(pageNumber + 1)}>&gt;</button>
           </div>
         )}
+          </div> {/* fecha containerRef div */}
+        </div> {/* fecha área centralizada */}
       </div>
     </div>
   );
