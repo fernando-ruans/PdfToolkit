@@ -1,3 +1,6 @@
+
+# --- ENDPOINTS FUNCIONAIS PARA TODOS OS MENUS ---
+# (Movidos para depois da definição do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,7 +27,35 @@ import threading
 conversion_progress = {}
 
 
+# Definição do app
 app = FastAPI(title="PDF Toolkit Python Backend")
+
+# Dividir PDF
+from PyPDF2 import PdfReader, PdfWriter
+@app.post("/api/edit/split")
+async def split_pdf(file: UploadFile = File(...), ranges: str = Form(...)):
+    """Divide o PDF conforme intervalos (ex: 1-1,2-2,3-5) e retorna ZIP."""
+    import zipfile
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    zip_buffer = io.BytesIO()
+    for idx, part in enumerate(ranges.split(",")):
+        writer = PdfWriter()
+        if "-" in part:
+            start, end = [int(x)-1 for x in part.split("-")]
+        else:
+            start = end = int(part)-1
+        for i in range(start, end+1):
+            if 0 <= i < len(reader.pages):
+                writer.add_page(reader.pages[i])
+        out = io.BytesIO()
+        writer.write(out)
+        out.seek(0)
+        with zipfile.ZipFile(zip_buffer, "a") as zipf:
+            zipf.writestr(f"split_{idx+1}.pdf", out.read())
+    zip_buffer.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=splits.zip"})
 # Endpoint para juntar múltiplos PDFs
 @app.post("/api/merge")
 async def merge_pdfs(files: List[UploadFile] = File(...)):

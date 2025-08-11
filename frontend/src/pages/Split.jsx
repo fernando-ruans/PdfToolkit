@@ -18,9 +18,9 @@ export default function Split() {
     setDownUrl(null)
     setProgress(0)
     if (!file) return
-    const form = new FormData()
-    form.append('files', file)
-    form.append('ranges', ranges)
+  const form = new FormData()
+  form.append('file', file)
+  form.append('ranges', ranges)
     try {
       const res = await axios.post('/api/edit/split', form, {
         responseType: 'blob',
