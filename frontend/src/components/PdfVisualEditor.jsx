@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { FaMousePointer, FaFont, FaPen, FaHighlighter, FaSquare, FaCircle, FaUndo, FaRedo, FaSave } from "react-icons/fa";
+import { FaMousePointer, FaFont, FaPen, FaHighlighter, FaSquare, FaCircle, FaUndo, FaRedo, FaSave, FaSearchPlus, FaSearchMinus, FaSyncAlt, FaExpand } from "react-icons/fa";
 
 // Importar o CSS do pdfjs-dist no main.jsx ou App.jsx:
 // import 'pdfjs-dist/web/pdf_viewer.css';
@@ -18,6 +18,9 @@ const TOOL = {
 };
 
 export default function PdfVisualEditor({ file, onSave }) {
+  // Zoom e rotação
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0); // graus
   const [tool, setTool] = useState(TOOL.SELECT);
   const [thumbnails, setThumbnails] = useState([]); // Array de miniaturas (dataURL)
   const [numPages, setNumPages] = useState(null);
@@ -234,6 +237,14 @@ export default function PdfVisualEditor({ file, onSave }) {
           <button onClick={() => setTool(TOOL.RECT)} title="Retângulo (R)" className={`rounded p-2 transition ${tool === TOOL.RECT ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaSquare size={18} /></button>
           <button onClick={() => setTool(TOOL.CIRCLE)} title="Círculo (C)" className={`rounded p-2 transition ${tool === TOOL.CIRCLE ? 'bg-blue-100 text-blue-700 shadow' : 'hover:bg-gray-100'}`}><FaCircle size={18} /></button>
         </div>
+        {/* Zoom e rotação */}
+        <div className="flex gap-1 ml-4 items-center">
+          <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} title="Diminuir zoom (-)" className="rounded p-2 transition hover:bg-gray-100"><FaSearchMinus size={18} /></button>
+          <span className="text-xs w-10 text-center select-none">{Math.round(zoom*100)}%</span>
+          <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} title="Aumentar zoom (+)" className="rounded p-2 transition hover:bg-gray-100"><FaSearchPlus size={18} /></button>
+          <button onClick={() => setZoom(1)} title="Resetar zoom" className="rounded p-2 transition hover:bg-gray-100"><FaExpand size={16} /></button>
+          <button onClick={() => setRotation(r => (r + 90) % 360)} title="Rotacionar página 90°" className="rounded p-2 transition hover:bg-gray-100"><FaSyncAlt size={17} /></button>
+    </div>
         <div className="flex gap-1 ml-4">
           <button
             onClick={() => {
@@ -351,8 +362,8 @@ export default function PdfVisualEditor({ file, onSave }) {
           </button>
         </div>
         <span className="ml-6 text-gray-500 font-medium">Ferramenta: <span className="capitalize text-blue-700">{tool}</span></span>
-      </div>
-      {/* Área de edição centralizada com fundo quadriculado e sombra */}
+  </div>
+  {/* Área de edição centralizada com fundo quadriculado e sombra */}
       <div
         className="flex-1 w-full flex justify-center items-center bg-gradient-to-br from-blue-50 via-white to-purple-50 py-6 px-2 overflow-auto"
         style={{ minHeight: 600 }}
@@ -395,9 +406,10 @@ export default function PdfVisualEditor({ file, onSave }) {
           {!pdfError && (
             <Page
               pageNumber={pageNumber}
-              width={containerRef.current?.offsetWidth ? Math.min(containerRef.current.offsetWidth, 900) : 900}
+              width={containerRef.current?.offsetWidth ? Math.min(containerRef.current.offsetWidth, 900) * zoom : 900 * zoom}
               renderAnnotationLayer={true}
               renderTextLayer={true}
+              rotate={rotation}
             />
           )}
         </Document>

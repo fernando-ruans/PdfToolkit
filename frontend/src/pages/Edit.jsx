@@ -40,28 +40,30 @@ const Edit = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto mt-10 p-6 bg-white rounded shadow">
-      <h2 className="text-2xl font-bold mb-4">Editar PDF</h2>
-      <input type="file" accept="application/pdf" onChange={handleFileChange} />
-      <div className="mt-4" style={{ minHeight: 600 }}>
+    <div className="max-w-6xl w-full mx-auto mt-8 p-8 bg-white rounded-2xl shadow-2xl flex flex-col items-center min-h-[90vh]">
+      <h2 className="text-3xl font-bold mb-6 self-start">Editar PDF</h2>
+      <div className="w-full flex flex-col gap-2 items-start">
+        <input type="file" accept="application/pdf" onChange={handleFileChange} className="mb-2" />
+        {error && <div className="text-red-600">{error}</div>}
+        {downloadUrl && (
+          <div>
+            <a
+              href={downloadUrl}
+              download="edited.pdf"
+              className="text-green-700 underline font-semibold"
+            >
+              Baixar PDF Editado
+            </a>
+          </div>
+        )}
+      </div>
+      <div className="w-full flex-1 flex flex-col mt-4 min-h-[700px]">
         {file ? (
           <PdfVisualEditor file={file} />
         ) : (
-          <div className="text-gray-400">Selecione um PDF para editar</div>
+          <div className="text-gray-400 flex-1 flex items-center justify-center text-lg">Selecione um PDF para editar</div>
         )}
       </div>
-      {error && <div className="mt-4 text-red-600">{error}</div>}
-      {downloadUrl && (
-        <div className="mt-4">
-          <a
-            href={downloadUrl}
-            download="edited.pdf"
-            className="text-green-700 underline font-semibold"
-          >
-            Baixar PDF Editado
-          </a>
-        </div>
-      )}
     </div>
   );
 };
