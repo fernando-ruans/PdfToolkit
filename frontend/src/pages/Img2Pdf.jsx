@@ -25,7 +25,7 @@ const Img2Pdf = () => {
     const formData = new FormData();
     files.forEach((file, idx) => formData.append('files', file));
     try {
-      const response = await axios.post('/api/convert', formData, {
+  const response = await axios.post('/api/img2pdf', formData, {
         responseType: 'blob',
         headers: { 'Content-Type': 'multipart/form-data' },
       });

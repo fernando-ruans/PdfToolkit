@@ -4,7 +4,7 @@ import { FaFileImport, FaFileExport } from 'react-icons/fa';
 
 export default function Convert() {
   const [file, setFile] = useState(null);
-  const [targetFormat, setTargetFormat] = useState('pdf');
+  // targetFormat removido, só PDF <-> Imagem
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -15,9 +15,7 @@ export default function Convert() {
     setError('');
   };
 
-  const handleFormatChange = (e) => {
-    setTargetFormat(e.target.value);
-  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,29 +26,23 @@ export default function Convert() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('targetFormat', targetFormat);
-      const response = await axios.post('/api/convert', formData, {
-        responseType: 'blob',
-      });
-      // Detecta se a resposta é um erro JSON/texto
-      const contentType = response.headers['content-type'];
-      if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
-        // Tenta ler o erro
-        const text = await response.data.text();
-        let msg = text;
-        try {
-          const json = JSON.parse(text);
-          msg = json.error || text;
-        } catch {}
-        setError(msg);
-        setDownloadUrl('');
+      let endpoint = '';
+      if (file.type === 'application/pdf') {
+        endpoint = '/api/pdf2img';
+      } else if (file.type.startsWith('image/')) {
+        endpoint = '/api/img2pdf';
+      } else {
+        setError('Formato não suportado. Envie PDF ou imagem.');
+        setLoading(false);
         return;
       }
-      // Caso contrário, é arquivo válido
+      const response = await axios.post(endpoint, formData, {
+        responseType: 'blob',
+      });
       const url = window.URL.createObjectURL(response.data);
       setDownloadUrl(url);
     } catch (err) {
-  setError('Falha ao converter o arquivo.');
+      setError('Falha ao converter o arquivo.');
     } finally {
       setLoading(false);
     }
@@ -63,16 +55,8 @@ export default function Convert() {
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="file" onChange={handleFileChange} className="block w-full" />
-        <div>
-          <label className="block mb-1 font-semibold">Converter para:</label>
-          <select value={targetFormat} onChange={handleFormatChange} className="w-full p-2 border rounded">
-            <option value="pdf">PDF</option>
-            <option value="docx">Word (.docx)</option>
-            <option value="pptx">PowerPoint (.pptx)</option>
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="jpg">Imagem (.jpg)</option>
-            <option value="png">Imagem (.png)</option>
-          </select>
+        <div className="mb-4 text-gray-500 text-sm">
+          <span>Formatos suportados: PDF → Imagem, Imagem → PDF</span>
         </div>
         <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
           <FaFileExport /> {loading ? 'Convertendo...' : 'Converter'}

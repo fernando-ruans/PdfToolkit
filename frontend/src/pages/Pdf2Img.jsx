@@ -25,11 +25,25 @@ const Pdf2Img = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await axios.post('/api/edit/pdf2img', formData, {
+  const response = await axios.post('/api/pdf2img', formData, {
         responseType: 'blob',
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }));
+      // Detecta se a resposta é erro JSON/texto
+      const contentType = response.headers['content-type'];
+      if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
+        const text = await response.data.text();
+        let msg = text;
+        try {
+          const json = JSON.parse(text);
+          msg = json.error || text;
+        } catch {}
+        setError(msg);
+        setDownloadUrl('');
+        return;
+      }
+      // Caso contrário, é arquivo válido
+      const url = window.URL.createObjectURL(response.data);
       setDownloadUrl(url);
     } catch (err) {
       setError('Falha ao converter PDF para imagens.');
