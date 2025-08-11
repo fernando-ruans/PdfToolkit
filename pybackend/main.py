@@ -56,21 +56,22 @@ async def spa_fallback(full_path: str):
             return HTMLResponse(f.read(), status_code=200)
     return HTMLResponse(status_code=404, content="index.html não encontrado")
 
+
+from fastapi.responses import StreamingResponse
+import zipfile
+import io
+
 @app.post("/api/pdf2img")
 async def pdf_to_img(file: UploadFile = File(...)):
-    """Converte PDF em imagens (uma por página)."""
+    """Converte PDF em imagens (uma por página) e retorna um ZIP para download."""
     try:
         import fitz  # PyMuPDF
     except ImportError:
         raise HTTPException(status_code=500, detail="PyMuPDF não instalado. Use: pip install pymupdf")
-    
-    # Salvar PDF temporário
     pdf_id = str(uuid4())
     pdf_path = os.path.join(UPLOAD_DIR, f"{pdf_id}.pdf")
     with open(pdf_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
-    # Converter PDF em imagens
     doc = fitz.open(pdf_path)
     img_paths = []
     for i, page in enumerate(doc):
@@ -79,34 +80,34 @@ async def pdf_to_img(file: UploadFile = File(...)):
         pix.save(img_path)
         img_paths.append(img_path)
     doc.close()
-    
-    # Retornar lista de arquivos gerados
-    return JSONResponse({"images": [os.path.basename(p) for p in img_paths]})
+    # Compactar imagens em um ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        for img_path in img_paths:
+            zipf.write(img_path, os.path.basename(img_path))
+    zip_buffer.seek(0)
+    # Limpar imagens temporárias
+    for p in img_paths:
+        os.remove(p)
+    os.remove(pdf_path)
+    return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": f"attachment; filename=pdf2img_{pdf_id}.zip"})
+
 
 @app.post("/api/img2pdf")
-async def img_to_pdf(files: List[UploadFile] = File(...)):
-    """Converte imagens em um único PDF."""
+async def img_to_pdf(file: UploadFile = File(...)):
+    """Converte uma imagem em PDF."""
     try:
         from PIL import Image
     except ImportError:
         raise HTTPException(status_code=500, detail="Pillow não instalado. Use: pip install pillow")
-    
     img_id = str(uuid4())
-    img_paths = []
-    for i, file in enumerate(files):
-        img_path = os.path.join(UPLOAD_DIR, f"{img_id}_{i}.png")
-        with open(img_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        img_paths.append(img_path)
-    
-    images = [Image.open(p).convert("RGB") for p in img_paths]
+    img_path = os.path.join(UPLOAD_DIR, f"{img_id}.png")
+    with open(img_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    image = Image.open(img_path).convert("RGB")
     pdf_path = os.path.join(UPLOAD_DIR, f"{img_id}.pdf")
-    images[0].save(pdf_path, save_all=True, append_images=images[1:])
-    
-    # Limpar imagens temporárias
-    for p in img_paths:
-        os.remove(p)
-    
+    image.save(pdf_path)
+    os.remove(img_path)
     return FileResponse(pdf_path, filename="output.pdf")
 
 @app.get("/api/tmp/{filename}")
