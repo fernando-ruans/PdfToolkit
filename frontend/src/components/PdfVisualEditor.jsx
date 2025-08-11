@@ -41,6 +41,17 @@ export default function PdfVisualEditor({ file, onSave }) {
   const [drawingShape, setDrawingShape] = useState(null); // 'rect' | 'circle' | null
   const canvasRef = useRef();
   const containerRef = useRef();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Detecta entrada/saída do modo fullscreen
+  useEffect(() => {
+    function handleFsChange() {
+      setIsFullscreen(!!document.fullscreenElement && document.fullscreenElement === editorRootRef.current);
+    }
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+  const editorRootRef = useRef();
 
   useEffect(() => {
     setPageNumber(1);
@@ -226,7 +237,11 @@ export default function PdfVisualEditor({ file, onSave }) {
   }
 
   return (
-  <div className="w-full h-full flex flex-col items-center justify-center">
+      <div
+        ref={editorRootRef}
+        className={`w-full h-full flex flex-col items-center justify-center ${isFullscreen ? 'fixed top-0 left-0 z-[9999] bg-white rounded-none shadow-none !max-w-none !min-h-0' : ''}`}
+        style={isFullscreen ? { width: '100vw', height: '100vh', margin: 0, padding: 0, borderRadius: 0 } : {}}
+      >
       {/* Barra de ferramentas fixa */}
       <div className="sticky top-0 z-10 w-full flex justify-center bg-white/90 shadow-md border-b py-2 px-2 gap-2 rounded-b-xl backdrop-blur">
         <div className="flex gap-1">
@@ -242,7 +257,21 @@ export default function PdfVisualEditor({ file, onSave }) {
           <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} title="Diminuir zoom (-)" className="rounded p-2 transition hover:bg-gray-100"><FaSearchMinus size={18} /></button>
           <span className="text-xs w-10 text-center select-none">{Math.round(zoom*100)}%</span>
           <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} title="Aumentar zoom (+)" className="rounded p-2 transition hover:bg-gray-100"><FaSearchPlus size={18} /></button>
-          <button onClick={() => setZoom(1)} title="Resetar zoom" className="rounded p-2 transition hover:bg-gray-100"><FaExpand size={16} /></button>
+          <button
+            onClick={() => {
+              if (editorRootRef.current) {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen();
+                } else {
+                  editorRootRef.current.requestFullscreen();
+                }
+              }
+            }}
+            title="Tela cheia"
+            className="rounded p-2 transition hover:bg-gray-100"
+          >
+            <FaExpand size={16} />
+          </button>
           <button onClick={() => setRotation(r => (r + 90) % 360)} title="Rotacionar página 90°" className="rounded p-2 transition hover:bg-gray-100"><FaSyncAlt size={17} /></button>
     </div>
         <div className="flex gap-1 ml-4">
