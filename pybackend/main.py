@@ -30,7 +30,6 @@ conversion_progress = {}
 # Definição do app
 app = FastAPI(title="PDF Toolkit Python Backend")
 
-# Dividir PDF
 from PyPDF2 import PdfReader, PdfWriter
 @app.post("/api/edit/split")
 async def split_pdf(file: UploadFile = File(...), ranges: str = Form(...)):
@@ -56,6 +55,21 @@ async def split_pdf(file: UploadFile = File(...), ranges: str = Form(...)):
     zip_buffer.seek(0)
     from fastapi.responses import StreamingResponse
     return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=splits.zip"})
+
+# Comprimir PDF (regrava, não reduz imagens)
+@app.post("/api/edit/compress")
+async def compress_pdf(file: UploadFile = File(...), level: str = Form("default")):
+    from PyPDF2 import PdfReader, PdfWriter
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=compressed.pdf"})
 # Endpoint para juntar múltiplos PDFs
 @app.post("/api/merge")
 async def merge_pdfs(files: List[UploadFile] = File(...)):
