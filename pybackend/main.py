@@ -56,7 +56,6 @@ async def split_pdf(file: UploadFile = File(...), ranges: str = Form(...)):
     from fastapi.responses import StreamingResponse
     return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=splits.zip"})
 
-# Comprimir PDF (regrava, não reduz imagens)
 @app.post("/api/edit/compress")
 async def compress_pdf(file: UploadFile = File(...), level: str = Form("default")):
     from PyPDF2 import PdfReader, PdfWriter
@@ -70,6 +69,20 @@ async def compress_pdf(file: UploadFile = File(...), level: str = Form("default"
     out.seek(0)
     from fastapi.responses import StreamingResponse
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=compressed.pdf"})
+
+# Editar conteúdo (stub: só regrava)
+@app.post("/api/edit/content")
+async def edit_content(file: UploadFile = File(...)):
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=edited.pdf"})
 # Endpoint para juntar múltiplos PDFs
 @app.post("/api/merge")
 async def merge_pdfs(files: List[UploadFile] = File(...)):
@@ -123,8 +136,11 @@ from starlette.requests import Request
 
 
 
+
 # Servir assets do Vite em /assets
 app.mount("/assets", StaticFiles(directory="../frontend/dist/assets"), name="assets")
+# Servir arquivos públicos do frontend (ex: pdf.worker.min.js)
+app.mount("/public", StaticFiles(directory="../frontend/public"), name="public")
 
 
 

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import PdfVisualEditor from '../components/PdfVisualEditor';
 
 const Edit = () => {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [downloadUrl, setDownloadUrl] = useState('');
+  const [loading, setLoading] = useState(false); // Keeping loading state for the button
+  const [error, setError] = useState(''); // Keeping error state for error messages
+  const [downloadUrl, setDownloadUrl] = useState(''); // Keeping download URL for the edited PDF
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -41,21 +42,14 @@ const Edit = () => {
   return (
     <div className="max-w-xl mx-auto mt-10 p-6 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Editar PDF</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileChange}
-          className="block w-full text-sm text-gray-700"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Editando...' : 'Editar PDF'}
-        </button>
-      </form>
+      <input type="file" accept="application/pdf" onChange={handleFileChange} />
+      <div className="mt-4" style={{ minHeight: 600 }}>
+        {file ? (
+          <PdfVisualEditor file={file} />
+        ) : (
+          <div className="text-gray-400">Selecione um PDF para editar</div>
+        )}
+      </div>
       {error && <div className="mt-4 text-red-600">{error}</div>}
       {downloadUrl && (
         <div className="mt-4">
