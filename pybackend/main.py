@@ -2,6 +2,17 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import shutil
+import os
+from uuid import uuid4
+from typing import List
+import threading
+import io
+## Removido bloco duplicado de app e endpoint /api/merge daqui
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 import shutil
 import os
@@ -14,6 +25,32 @@ conversion_progress = {}
 
 
 app = FastAPI(title="PDF Toolkit Python Backend")
+# Endpoint para juntar múltiplos PDFs
+@app.post("/api/merge")
+async def merge_pdfs(files: List[UploadFile] = File(...)):
+    try:
+        from PyPDF2 import PdfMerger
+    except ImportError:
+        raise HTTPException(status_code=500, detail="PyPDF2 não instalado. Use: pip install pypdf2")
+    if not files or len(files) < 2:
+        raise HTTPException(status_code=400, detail="Envie pelo menos dois arquivos PDF.")
+    merger = PdfMerger()
+    temp_paths = []
+    for f in files:
+        temp_path = os.path.join(UPLOAD_DIR, f"merge_{uuid4()}.pdf")
+        with open(temp_path, "wb") as out:
+            shutil.copyfileobj(f.file, out)
+        merger.append(temp_path)
+        temp_paths.append(temp_path)
+    output_stream = io.BytesIO()
+    merger.write(output_stream)
+    merger.close()
+    # Limpar temporários
+    for p in temp_paths:
+        os.remove(p)
+    output_stream.seek(0)
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(output_stream, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=merged.pdf"})
 # Permitir frontend local
 @app.post("/api/start")
 def start_conversion():
