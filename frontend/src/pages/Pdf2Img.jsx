@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 
 const Pdf2Img = () => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const progressInterval = useRef(null);
   const [error, setError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
 
@@ -20,42 +22,58 @@ const Pdf2Img = () => {
       return;
     }
     setLoading(true);
+    setProgress(0);
     setError('');
     setDownloadUrl('');
+    let convId = null;
     try {
       // 1. Solicita um ID de conversão
       const idResp = await axios.post('/api/start');
-      const convId = idResp.data.id;
+      convId = idResp.data.id;
       if (!convId) throw new Error('Falha ao obter ID de conversão');
       // 2. Prepara o FormData com o ID
       const formData = new FormData();
       formData.append('file', file);
       formData.append('conv_id', convId);
-      // 3. Envia o arquivo para conversão
-      const response = await axios.post('/api/pdf2img', formData, {
+      // 3. Envia o arquivo para conversão (mostra progresso do upload)
+      await axios.post('/api/pdf2img', formData, {
         responseType: 'blob',
-        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          }
+        },
+        validateStatus: () => true,
+      }).then(async (response) => {
+        // Cria o link de download imediatamente
+        const url = window.URL.createObjectURL(response.data);
+        setDownloadUrl(url);
+        // Inicia polling de progresso só para atualizar a barra
+        let finished = false;
+        const pollProgress = (id) => {
+          progressInterval.current = setInterval(async () => {
+            try {
+              const res = await axios.get(`/api/progress/${id}`);
+              if (res.data && typeof res.data.progress === 'number') {
+                setProgress(res.data.progress);
+                if (res.data.progress >= 100 && !finished) {
+                  finished = true;
+                  clearInterval(progressInterval.current);
+                  setLoading(false);
+                  setProgress(100);
+                }
+              }
+            } catch {}
+          }, 500);
+        };
+        pollProgress(convId);
       });
-      // Detecta se a resposta é erro JSON/texto
-      const contentType = response.headers['content-type'];
-      if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
-        const text = await response.data.text();
-        let msg = text;
-        try {
-          const json = JSON.parse(text);
-          msg = json.error || text;
-        } catch {}
-        setError(msg);
-        setDownloadUrl('');
-        return;
-      }
-      // Caso contrário, é arquivo válido
-      const url = window.URL.createObjectURL(response.data);
-      setDownloadUrl(url);
     } catch (err) {
       setError('Falha ao converter PDF para imagens.');
     } finally {
       setLoading(false);
+      setTimeout(() => setProgress(0), 1000);
+      if (progressInterval.current) clearInterval(progressInterval.current);
     }
   };
 
@@ -76,6 +94,21 @@ const Pdf2Img = () => {
         >
           {loading ? 'Convertendo...' : 'Converter PDF'}
         </button>
+        {loading && (
+          <div className="w-full bg-gray-200 rounded-full h-6 mt-2 relative">
+            <div
+              className="bg-blue-600 h-6 rounded-full transition-all duration-200 flex items-center justify-center text-white text-xs font-bold"
+              style={{ width: `${progress}%` }}
+            >
+              {progress > 8 && (
+                <span className="w-full text-center select-none">{progress}%</span>
+              )}
+            </div>
+            {progress <= 8 && (
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600 text-xs font-bold select-none">{progress}%</span>
+            )}
+          </div>
+        )}
       </form>
       {error && <div className="mt-4 text-red-600">{error}</div>}
       {downloadUrl && (
