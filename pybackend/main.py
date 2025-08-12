@@ -218,8 +218,10 @@ import zipfile
 import io
 
 
+from typing import Optional
+import json
 @app.post("/api/pdf2img")
-async def pdf_to_img(file: UploadFile = File(...), conv_id: str = Form(...)):
+async def pdf_to_img(file: UploadFile = File(...), conv_id: Optional[str] = Form(None), pages: Optional[str] = Form(None)):
     print(f"[LOG] Recebido upload para PDF2IMG com conv_id={conv_id}")
     print(f"[LOG] Estado inicial do progresso: {conversion_progress.get(conv_id)}")
     """Converte PDF em imagens (uma por página) e retorna um ZIP para download. Progresso via polling."""
@@ -227,19 +229,33 @@ async def pdf_to_img(file: UploadFile = File(...), conv_id: str = Form(...)):
         import fitz  # PyMuPDF
     except ImportError:
         raise HTTPException(status_code=500, detail="PyMuPDF não instalado. Use: pip install pymupdf")
+    if not conv_id:
+        from uuid import uuid4
+        conv_id = str(uuid4())
     pdf_path = os.path.join(UPLOAD_DIR, f"{conv_id}.pdf")
     with open(pdf_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     doc = fitz.open(pdf_path)
     img_paths = []
     total = doc.page_count
-    for i, page in enumerate(doc):
-        print(f"[LOG] PDF2IMG conv_id={conv_id} página {i+1}/{total}")
+    # Se páginas foram especificadas, extrair apenas essas
+    if pages:
+        try:
+            selected_pages = json.loads(pages)
+            # Garantir que são inteiros válidos e dentro do range
+            selected_pages = [p for p in selected_pages if isinstance(p, int) and 1 <= p <= total]
+        except Exception as e:
+            selected_pages = []
+    else:
+        selected_pages = list(range(1, total+1))
+    for idx, page_num in enumerate(selected_pages):
+        page = doc.load_page(page_num-1)
+        print(f"[LOG] PDF2IMG conv_id={conv_id} página {page_num}/{total}")
         pix = page.get_pixmap()
-        img_path = os.path.join(UPLOAD_DIR, f"{conv_id}_page{i+1}.png")
+        img_path = os.path.join(UPLOAD_DIR, f"{conv_id}_page{page_num}.png")
         pix.save(img_path)
         img_paths.append(img_path)
-        conversion_progress[conv_id] = int(((i+1)/total)*90)  # 0-90% durante conversão
+        conversion_progress[conv_id] = int(((idx+1)/len(selected_pages))*90)  # 0-90% durante conversão
     doc.close()
     # Compactar imagens em um ZIP
     zip_buffer = io.BytesIO()
