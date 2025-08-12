@@ -12,6 +12,7 @@ const Sign = () => {
   const [downloadUrl, setDownloadUrl] = useState('');
   const [pageWidth, setPageWidth] = useState(500);
   const [pageHeight, setPageHeight] = useState(700);
+  const [pdfDims, setPdfDims] = useState(null); // {width, height}
   const [signText, setSignText] = useState('Assinado digitalmente');
   const [signPos, setSignPos] = useState(null); // {x, y}
   const [signatureImg, setSignatureImg] = useState(null); // dataUrl
@@ -27,11 +28,17 @@ const Sign = () => {
   };
 
   const handlePageClick = (e) => {
-    if (!pageRef.current) return;
+    if (!pageRef.current || !pdfDims) return;
     const rect = pageRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    setSignPos({ x: Math.round(x), y: Math.round(y) });
+    // Converter para escala do PDF
+    const scaleX = pdfDims.width / pageWidth;
+    const scaleY = pdfDims.height / pageHeight;
+    setSignPos({
+      x: Math.round(x * scaleX),
+      y: Math.round(y * scaleY)
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -78,14 +85,28 @@ const Sign = () => {
             <div className="mb-2 text-sm text-gray-600">Clique na página para escolher a posição da assinatura:</div>
             <div style={{ position: 'relative', display: 'inline-block', border: '1px solid #ddd', borderRadius: 8 }}>
               <div ref={pageRef} onClick={handlePageClick} style={{ cursor: 'crosshair' }}>
-                <Document file={file} onLoadSuccess={({ numPages }) => setNumPages(numPages)} loading="Carregando...">
+                <Document
+                  file={file}
+                  onLoadSuccess={async ({ numPages }) => {
+                    setNumPages(numPages);
+                    // Obter dimensões reais da página PDF
+                    if (file) {
+                      const arrayBuffer = await file.arrayBuffer();
+                      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+                      const page = await pdf.getPage(1);
+                      const viewport = page.getViewport({ scale: 1 });
+                      setPdfDims({ width: viewport.width, height: viewport.height });
+                    }
+                  }}
+                  loading="Carregando..."
+                >
                   <Page pageNumber={1} width={pageWidth} height={pageHeight} />
                 </Document>
-                {signPos && (
+                {signPos && pdfDims && (
                   <div style={{
                     position: 'absolute',
-                    left: signPos.x - 40,
-                    top: signPos.y - 15,
+                    left: (signPos.x / pdfDims.width) * pageWidth - 40,
+                    top: (signPos.y / pdfDims.height) * pageHeight - 15,
                     pointerEvents: 'none',
                     background: 'rgba(0,0,0,0.1)',
                     color: '#2563eb',
