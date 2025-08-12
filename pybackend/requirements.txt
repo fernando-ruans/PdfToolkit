@@ -1,4 +1,9 @@
+
 fastapi
 uvicorn
 pymupdf
 pillow
+python-multipart
+PyPDF2
+reportlab
+starlette
