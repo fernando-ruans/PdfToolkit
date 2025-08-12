@@ -257,24 +257,32 @@ async def pdf_to_img(file: UploadFile = File(...), conv_id: str = Form(...)):
 
 
 
+
+# Novo endpoint: aceita várias imagens e gera PDF multi-página
+from typing import List
 @app.post("/api/img2pdf")
-async def img_to_pdf(file: UploadFile = File(...), conv_id: str = Form(...)):
+async def img_to_pdf(files: List[UploadFile] = File(...), conv_id: str = Form(...)):
     print(f"[LOG] Recebido upload para IMG2PDF com conv_id={conv_id}")
     print(f"[LOG] Estado inicial do progresso: {conversion_progress.get(conv_id)}")
-    """Converte uma imagem em PDF. Progresso via polling."""
+    """Converte várias imagens em um PDF multi-página. Progresso via polling."""
     try:
         from PIL import Image
     except ImportError:
         raise HTTPException(status_code=500, detail="Pillow não instalado. Use: pip install pillow")
-    img_path = os.path.join(UPLOAD_DIR, f"{conv_id}.png")
-    with open(img_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    img_paths = []
+    for idx, file in enumerate(files):
+        img_path = os.path.join(UPLOAD_DIR, f"{conv_id}_{idx}.png")
+        with open(img_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        img_paths.append(img_path)
     conversion_progress[conv_id] = 50
     print(f"[LOG] IMG2PDF conv_id={conv_id} progresso 50%")
-    image = Image.open(img_path).convert("RGB")
+    images = [Image.open(p).convert("RGB") for p in img_paths]
     pdf_path = os.path.join(UPLOAD_DIR, f"{conv_id}.pdf")
-    image.save(pdf_path)
-    os.remove(img_path)
+    if images:
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+    for p in img_paths:
+        os.remove(p)
     conversion_progress[conv_id] = 100
     print(f"[LOG] IMG2PDF conv_id={conv_id} FINALIZADO")
     return FileResponse(pdf_path, filename="output.pdf", headers={"X-Conversion-Id": conv_id})
