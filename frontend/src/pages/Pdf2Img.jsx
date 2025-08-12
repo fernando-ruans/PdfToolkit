@@ -22,10 +22,17 @@ const Pdf2Img = () => {
     setLoading(true);
     setError('');
     setDownloadUrl('');
-    const formData = new FormData();
-    formData.append('file', file);
     try {
-  const response = await axios.post('/api/pdf2img', formData, {
+      // 1. Solicita um ID de conversão
+      const idResp = await axios.post('/api/start');
+      const convId = idResp.data.id;
+      if (!convId) throw new Error('Falha ao obter ID de conversão');
+      // 2. Prepara o FormData com o ID
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conv_id', convId);
+      // 3. Envia o arquivo para conversão
+      const response = await axios.post('/api/pdf2img', formData, {
         responseType: 'blob',
         headers: { 'Content-Type': 'multipart/form-data' },
       });
