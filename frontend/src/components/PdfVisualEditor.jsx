@@ -402,7 +402,14 @@ export default function PdfVisualEditor({ file, onSave }) {
           {thumbnails.length > 1 && (
             <div
               className="flex flex-col items-center gap-2 py-2 px-1 bg-white/80 border-r rounded-l-2xl shadow min-w-[70px] max-w-[90px] z-10 overflow-y-auto overflow-x-hidden"
-              style={{ height: '100%', maxHeight: '100%', minHeight: 0, flex: '0 0 auto' }}
+              style={{
+                height: '100%',
+                maxHeight: '100%',
+                minHeight: 0,
+                flex: '0 0 auto',
+                // Limite para modo normal (não fullscreen)
+                ...(isFullscreen ? {} : { maxHeight: 'calc(80vh - 64px)' })
+              }}
             >
               {thumbnails.map((thumb, idx) => (
                 <button
