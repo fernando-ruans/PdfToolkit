@@ -41,6 +41,9 @@ export default function Convert() {
         endpoint = '/api/pdf2img';
       } else if (file.type.startsWith('image/')) {
         endpoint = '/api/img2pdf';
+        // Corrigir: backend espera 'files' (array), não 'file'
+        formData.delete('file');
+        formData.append('files', file);
       } else {
         setError('Formato não suportado. Envie PDF ou imagem.');
         setLoading(false);
