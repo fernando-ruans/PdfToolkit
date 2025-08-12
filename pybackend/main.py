@@ -1,6 +1,5 @@
 
-# --- ENDPOINTS FUNCIONAIS PARA TODOS OS MENUS ---
-# (Movidos para depois da definição do app)
+# Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,24 +10,70 @@ from uuid import uuid4
 from typing import List
 import threading
 import io
-## Removido bloco duplicado de app e endpoint /api/merge daqui
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-
-import shutil
-import os
-from uuid import uuid4
-from typing import List
-import threading
-
-# Controle de progresso global (simples, por id)
-conversion_progress = {}
-
 
 # Definição do app
 app = FastAPI(title="PDF Toolkit Python Backend")
+
+# Endpoint para assinar PDF (customizável)
+
+# Endpoint para assinar PDF com imagem (dataUrl base64)
+@app.post("/api/edit/sign")
+async def sign_pdf(
+    file: UploadFile = File(...),
+    x: int = Form(50),
+    y: int = Form(50),
+    signature_img: str = Form(None)
+):
+    from PyPDF2 import PdfReader, PdfWriter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.utils import ImageReader
+    import base64
+    import re
+    from PIL import Image
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for i, page in enumerate(reader.pages):
+        packet = io.BytesIO()
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+        can = canvas.Canvas(packet, pagesize=(width, height))
+        # Só assina a primeira página
+        if i == 0 and signature_img:
+            # Extrair base64 puro
+            match = re.match(r"data:image/(png|jpeg);base64,(.*)", signature_img)
+            if match:
+                img_data = base64.b64decode(match.group(2))
+                img = Image.open(io.BytesIO(img_data))
+                # Ajustar tamanho da assinatura se necessário
+                max_w, max_h = 200, 60
+                ratio = min(max_w / img.width, max_h / img.height, 1)
+                new_w, new_h = int(img.width * ratio), int(img.height * ratio)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+                img_io = io.BytesIO()
+                img.save(img_io, format='PNG')
+                img_io.seek(0)
+                can.drawImage(ImageReader(img_io), x, height - y - new_h, width=new_w, height=new_h, mask='auto')
+        can.save()
+        packet.seek(0)
+        from PyPDF2 import PdfReader as RLReader
+        sig_pdf = RLReader(packet)
+        sig_page = sig_pdf.pages[0]
+        page.merge_page(sig_page)
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=assinado.pdf"})
+
+
+# --- ENDPOINTS FUNCIONAIS PARA TODOS OS MENUS ---
+# (Bloco duplicado removido para evitar conflitos)
+
+# Controle de progresso global (simples, por id)
+conversion_progress = {}
 
 from PyPDF2 import PdfReader, PdfWriter
 @app.post("/api/edit/split")
