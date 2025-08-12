@@ -16,6 +16,22 @@ app = FastAPI(title="PDF Toolkit Python Backend")
 
 # Endpoint para assinar PDF (customizável)
 
+# Endpoint para proteger PDF com senha
+from fastapi.responses import StreamingResponse
+@app.post("/api/edit/protect")
+async def protect_pdf(file: UploadFile = File(...), password: str = Form(...)):
+    from PyPDF2 import PdfReader, PdfWriter
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    writer.encrypt(password)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=protegido.pdf"})
+
 # Endpoint para assinar PDF com imagem (dataUrl base64)
 @app.post("/api/edit/sign")
 async def sign_pdf(
