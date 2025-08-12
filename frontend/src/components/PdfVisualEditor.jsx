@@ -395,17 +395,20 @@ export default function PdfVisualEditor({ file, onSave }) {
   {/* Área de edição centralizada com fundo quadriculado e sombra */}
       <div
         className="flex-1 w-full flex justify-center items-center bg-gradient-to-br from-blue-50 via-white to-purple-50 py-6 px-2 overflow-auto"
-        style={{ minHeight: 600 }}
+        style={{ minHeight: 600, height: '100%', minHeight: 0 }}
       >
-        <div className="relative rounded-2xl shadow-2xl border bg-[conic-gradient(at_top_left,_var(--tw-gradient-stops))] from-white via-blue-50 to-purple-50 p-2 flex" style={{ minWidth: 350, maxWidth: 950, width: '100%' }}>
+        <div className="relative rounded-2xl shadow-2xl border bg-[conic-gradient(at_top_left,_var(--tw-gradient-stops))] from-white via-blue-50 to-purple-50 p-2 flex" style={{ minWidth: 350, maxWidth: 950, width: '100%', height: '100%', minHeight: 0 }}>
           {/* Miniaturas de páginas */}
           {thumbnails.length > 1 && (
-            <div className="flex flex-col items-center gap-2 py-2 px-1 bg-white/80 border-r rounded-l-2xl shadow h-full min-w-[60px] max-w-[70px] z-10">
+            <div
+              className="flex flex-col items-center gap-2 py-2 px-1 bg-white/80 border-r rounded-l-2xl shadow min-w-[70px] max-w-[90px] z-10 overflow-y-auto overflow-x-hidden"
+              style={{ height: '100%', maxHeight: '100%', minHeight: 0, flex: '0 0 auto' }}
+            >
               {thumbnails.map((thumb, idx) => (
                 <button
                   key={idx}
                   className={`rounded-lg border-2 ${pageNumber === idx + 1 ? 'border-blue-500 shadow-lg' : 'border-transparent'} overflow-hidden focus:outline-none`}
-                  style={{ width: 44, height: 62, background: '#f3f4f6' }}
+                  style={{ width: 65, height: 80, background: '#f3f4f6', minHeight: 60, maxHeight: 90 }}
                   onClick={() => setPageNumber(idx + 1)}
                   title={`Ir para página ${idx + 1}`}
                 >
