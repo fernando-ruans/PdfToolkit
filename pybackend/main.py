@@ -1,4 +1,5 @@
 
+
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -31,6 +32,25 @@ async def protect_pdf(file: UploadFile = File(...), password: str = Form(...)):
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=protegido.pdf"})
+
+# Endpoint para remover senha de PDF
+from fastapi.responses import StreamingResponse
+@app.post("/api/edit/unprotect")
+async def unprotect_pdf(file: UploadFile = File(...), password: str = Form(...)):
+    from PyPDF2 import PdfReader, PdfWriter
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    if reader.is_encrypted:
+        if not reader.decrypt(password):
+            raise HTTPException(status_code=400, detail="Senha incorreta ou PDF não pode ser desbloqueado.")
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    # Não define senha, PDF sai desbloqueado
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=desprotegido.pdf"})
 
 # Endpoint para assinar PDF com imagem (dataUrl base64)
 @app.post("/api/edit/sign")
