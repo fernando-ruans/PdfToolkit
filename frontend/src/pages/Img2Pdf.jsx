@@ -86,8 +86,8 @@ const Img2Pdf = () => {
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded shadow flex flex-col gap-6">
       <h2 className="text-2xl font-bold mb-2">Imagens para PDF</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-6">
-        <div className="flex flex-col gap-2 w-full md:w-3/4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <div className="flex flex-row gap-4 items-center mb-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -98,61 +98,59 @@ const Img2Pdf = () => {
           />
           <button
             type="button"
-            className="w-full max-w-xs bg-orange-500 text-white px-3 py-2 rounded hover:bg-orange-600 mb-4"
+            className="bg-orange-500 text-white px-5 py-2 rounded hover:bg-orange-600"
             onClick={() => fileInputRef.current && fileInputRef.current.click()}
           >
             Adicionar Imagem
           </button>
-          <div className="w-full overflow-x-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {thumbs.map((t, idx) => (
-                <div key={idx} className="flex flex-col items-center" style={{ width: 120 }}>
-                  <div
-                    className={`border-2 rounded relative group transition-all duration-150 bg-white ${dragOverIdx === idx ? 'ring-2 ring-orange-400' : 'border-gray-300'}`}
-                    style={{ width: 100, height: 100, overflow: 'hidden', background: '#f8fafc' }}
-                    draggable
-                    onDragStart={() => handleDragStart(idx)}
-                    onDragEnter={() => handleDragEnter(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={e => e.preventDefault()}
-                    title={t.file.name}
-                  >
-                    <img src={t.url} alt="thumb" className="object-contain w-full h-full" />
-                    <button
-                      type="button"
-                      className="absolute top-0 right-0 bg-white bg-opacity-80 text-red-600 rounded-bl px-1 py-0.5 text-xs opacity-0 group-hover:opacity-100"
-                      onClick={e => { e.stopPropagation(); handleRemove(idx); }}
-                      title="Remover"
-                    >×</button>
-                  </div>
-                  <div className="text-xs text-gray-700 mt-1 w-full truncate text-center font-mono" title={t.file.name}>
-                    {t.file.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-4 w-full md:w-1/4 items-center justify-center">
           <button
             type="submit"
             disabled={loading || !files.length}
-            className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 font-bold text-lg"
+            className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 disabled:opacity-50 font-bold text-lg"
           >
             {loading ? 'Convertendo...' : 'Converter para PDF'}
           </button>
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              download="output.pdf"
-              className="w-full text-center text-green-700 underline font-semibold mt-2"
-            >
-              Baixar PDF
-            </a>
-          )}
-          {error && <div className="mt-2 text-red-600 text-sm">{error}</div>}
         </div>
+        <div className="w-full overflow-x-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {thumbs.map((t, idx) => (
+              <div key={idx} className="flex flex-col items-center" style={{ width: 120 }}>
+                <div
+                  className={`border-2 rounded relative group transition-all duration-150 bg-white ${dragOverIdx === idx ? 'ring-2 ring-orange-400' : 'border-gray-300'}`}
+                  style={{ width: 100, height: 100, overflow: 'hidden', background: '#f8fafc' }}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragEnter={() => handleDragEnter(idx)}
+                  onDragLeave={handleDragLeave}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e => e.preventDefault()}
+                  title={t.file.name}
+                >
+                  <img src={t.url} alt="thumb" className="object-contain w-full h-full" />
+                  <button
+                    type="button"
+                    className="absolute top-0 right-0 bg-white bg-opacity-80 text-red-600 rounded-bl px-1 py-0.5 text-xs opacity-0 group-hover:opacity-100"
+                    onClick={e => { e.stopPropagation(); handleRemove(idx); }}
+                    title="Remover"
+                  >×</button>
+                </div>
+                <div className="text-xs text-gray-700 mt-1 w-full truncate text-center font-mono" title={t.file.name}>
+                  {t.file.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {downloadUrl && (
+          <a
+            href={downloadUrl}
+            download="output.pdf"
+            className="w-full text-center text-green-700 underline font-semibold mt-2"
+          >
+            Baixar PDF
+          </a>
+        )}
+        {error && <div className="mt-2 text-red-600 text-sm">{error}</div>}
       </form>
     </div>
   );
