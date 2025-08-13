@@ -357,19 +357,23 @@ def get_tmp_file(filename: str):
 
 # Endpoint para rotacionar páginas do PDF
 @app.post("/api/edit/rotate")
-async def rotate_pdf(file: UploadFile = File(...), pages: str = Form(...), angle: int = Form(...)):
+async def rotate_pdf(
+    file: UploadFile = File(...),
+    rotations: str = Form(...)
+):
     from PyPDF2 import PdfReader, PdfWriter
     import json
     pdf_bytes = await file.read()
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
     try:
-        pages_list = json.loads(pages)
-        pages_list = [int(p) for p in pages_list]
+        rotation_map = json.loads(rotations)  # {pagina: angulo}
     except Exception:
-        pages_list = []
+        rotation_map = {}
     for i, page in enumerate(reader.pages):
-        if (i+1) in pages_list:
+        page_num = str(i + 1)
+        angle = rotation_map.get(page_num) or rotation_map.get(i + 1) or 0
+        if angle:
             page.rotate(angle)
         writer.add_page(page)
     out = io.BytesIO()
