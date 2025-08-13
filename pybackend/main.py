@@ -1,5 +1,4 @@
 
-
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -355,3 +354,25 @@ def get_tmp_file(filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(file_path)
+
+# Endpoint para rotacionar páginas do PDF
+@app.post("/api/edit/rotate")
+async def rotate_pdf(file: UploadFile = File(...), pages: str = Form(...), angle: int = Form(...)):
+    from PyPDF2 import PdfReader, PdfWriter
+    import json
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    try:
+        pages_list = json.loads(pages)
+        pages_list = [int(p) for p in pages_list]
+    except Exception:
+        pages_list = []
+    for i, page in enumerate(reader.pages):
+        if (i+1) in pages_list:
+            page.rotate(angle)
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=rotacionado.pdf"})
