@@ -1,27 +1,48 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { Document, Page, pdfjs } from 'react-pdf';
+pdfjs.GlobalWorkerOptions.workerSrc = '/public/pdf.worker.min.js';
 
 const Remove = () => {
   const [file, setFile] = useState(null);
-  const [pages, setPages] = useState('');
+  const [numPages, setNumPages] = useState(null);
+  const [selectedPages, setSelectedPages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+    setNumPages(null);
+    setSelectedPages([]);
     setDownloadUrl('');
     setError('');
   };
 
-  const handlePagesChange = (e) => {
-    setPages(e.target.value);
+  const onDocumentLoadSuccess = ({ numPages }) => {
+    setNumPages(numPages);
+    setSelectedPages(Array(numPages).fill(false));
+  };
+
+  const handlePageSelect = (idx) => {
+    setSelectedPages((prev) => {
+      const copy = [...prev];
+      copy[idx] = !copy[idx];
+      return copy;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file || !pages) {
-      setError('Selecione um PDF e informe as páginas a remover.');
+    if (!file || !numPages) {
+      setError('Selecione um PDF.');
+      return;
+    }
+    const pagesToRemove = selectedPages
+      .map((v, i) => (v ? i + 1 : null))
+      .filter((v) => v !== null);
+    if (pagesToRemove.length === 0) {
+      setError('Selecione ao menos uma página para remover.');
       return;
     }
     setLoading(true);
@@ -29,7 +50,7 @@ const Remove = () => {
     setDownloadUrl('');
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('pages', pages);
+    formData.append('pages', JSON.stringify(pagesToRemove));
     try {
       const response = await axios.post('/api/edit/remove', formData, {
         responseType: 'blob',
@@ -45,8 +66,8 @@ const Remove = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto mt-10 p-6 bg-white rounded shadow">
-      <h2 className="text-2xl font-bold mb-4">Remover Páginas</h2>
+    <div className="max-w-2xl mx-auto mt-10 p-6 bg-white rounded shadow">
+      <h2 className="text-2xl font-bold mb-4">Remover Páginas do PDF</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="file"
@@ -54,17 +75,40 @@ const Remove = () => {
           onChange={handleFileChange}
           className="block w-full text-sm text-gray-700"
         />
-        <input
-          type="text"
-          placeholder="Ex: 2,4-6"
-          value={pages}
-          onChange={handlePagesChange}
-          className="block w-full text-sm text-gray-700 border rounded px-2 py-1 mt-2"
-        />
+        {file && (
+          <div className="my-4">
+            <Document
+              file={file}
+              onLoadSuccess={onDocumentLoadSuccess}
+              loading={<div>Carregando PDF...</div>}
+              error={<div>Falha ao carregar PDF.</div>}
+            >
+              <div className="flex flex-wrap gap-2">
+                {Array.from(new Array(numPages), (el, idx) => (
+                  <label key={idx} className={`flex flex-col items-center border rounded p-1 cursor-pointer ${selectedPages[idx] ? 'ring-2 ring-red-500' : ''}`}>
+                    <Page
+                      pageNumber={idx + 1}
+                      width={80}
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                    />
+                    <input
+                      type="checkbox"
+                      checked={!!selectedPages[idx]}
+                      onChange={() => handlePageSelect(idx)}
+                      className="mt-1"
+                    />
+                    <span className="text-xs">Remover pág. {idx + 1}</span>
+                  </label>
+                ))}
+              </div>
+            </Document>
+          </div>
+        )}
         <button
           type="submit"
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
         >
           {loading ? 'Removendo...' : 'Remover Páginas'}
         </button>
@@ -74,10 +118,10 @@ const Remove = () => {
         <div className="mt-4">
           <a
             href={downloadUrl}
-            download="pdf_sem_paginas.pdf"
+            download="pdf_removido.pdf"
             className="text-green-700 underline font-semibold"
           >
-            Baixar PDF Atualizado
+            Baixar PDF sem páginas
           </a>
         </div>
       )}

@@ -380,3 +380,27 @@ async def rotate_pdf(
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=rotacionado.pdf"})
+
+# Endpoint para remover páginas do PDF
+@app.post("/api/edit/remove")
+async def remove_pages_pdf(
+    file: UploadFile = File(...),
+    pages: str = Form(...)
+):
+    from PyPDF2 import PdfReader, PdfWriter
+    import json
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    try:
+        pages_to_remove = json.loads(pages)  # lista de páginas (1-based)
+        pages_to_remove = [int(p) for p in pages_to_remove]
+    except Exception:
+        pages_to_remove = []
+    for i, page in enumerate(reader.pages):
+        if (i + 1) not in pages_to_remove:
+            writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=removido.pdf"})
