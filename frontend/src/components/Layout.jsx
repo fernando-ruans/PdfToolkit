@@ -8,8 +8,10 @@ export default function Layout({ children }) {
       <header className="bg-white/80 backdrop-blur border-b shadow-sm sticky top-0 z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <FaTools className="text-blue-600" size={28} />
-            <Link to="/" className="font-extrabold text-2xl tracking-tight text-blue-700 hover:text-blue-900 transition">PDF Toolkit</Link>
+            <Link to="/" className="flex items-center gap-3">
+              <img src="/public/logo.png" alt="Logo PDF Toolkit" className="h-16 w-auto" style={{maxHeight: 64}} />
+              <span className="font-extrabold text-2xl tracking-tight text-blue-700 hover:text-blue-900 transition">PDF Toolkit</span>
+            </Link>
           </div>
           <nav className="flex items-center gap-4">
             <Link to="/" className="hover:text-blue-700 flex items-center gap-1"><FaHome /> Início</Link>

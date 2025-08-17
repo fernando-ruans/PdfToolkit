@@ -221,6 +221,7 @@ from starlette.requests import Request
 app.mount("/assets", StaticFiles(directory="../frontend/dist/assets"), name="assets")
 # Servir arquivos públicos do frontend (ex: pdf.worker.min.js)
 app.mount("/public", StaticFiles(directory="../frontend/public"), name="public")
+app.mount("/", StaticFiles(directory="../frontend/public"), name="public-root")
 
 
 
