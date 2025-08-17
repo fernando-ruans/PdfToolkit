@@ -13,7 +13,7 @@ import Compare from './Compare';
 import Watermark from './Watermark';
 import PageNum from './PageNum';
 import Reorder from './Reorder';
-import Extract from './Extract';
+import ExtractPages from './ExtractPages';
 import Remove from './Remove';
 import Rotate from './Rotate';
 import Unprotect from './Unprotect';
@@ -39,7 +39,7 @@ export default function App() {
           <Route path="/watermark" element={<Watermark />} />
           <Route path="/pagenum" element={<PageNum />} />
           <Route path="/reorder" element={<Reorder />} />
-          <Route path="/extract" element={<Extract />} />
+          <Route path="/extract" element={<ExtractPages />} />
           <Route path="/remove" element={<Remove />} />
           <Route path="/rotate" element={<Rotate />} />
           <Route path="/unprotect" element={<Unprotect />} />

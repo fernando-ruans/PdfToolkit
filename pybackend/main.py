@@ -1,4 +1,3 @@
-
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -404,3 +403,31 @@ async def remove_pages_pdf(
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=removido.pdf"})
+# Endpoint para extrair páginas do PDF
+from fastapi.responses import StreamingResponse
+@app.post("/api/edit/extract")
+async def extract_pages_pdf(
+    file: UploadFile = File(...),
+    pages: str = Form(...)
+):
+
+    from PyPDF2 import PdfReader, PdfWriter
+    import json
+    print(f"[EXTRACT] Valor recebido em 'pages': {pages}")
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    try:
+        pages_to_extract = json.loads(pages)  # lista de páginas (1-based)
+        pages_to_extract = [int(p) for p in pages_to_extract]
+        print(f"[EXTRACT] Páginas para extrair após parsing: {pages_to_extract}")
+    except Exception as e:
+        print(f"[EXTRACT] Erro ao parsear páginas: {e}")
+        pages_to_extract = []
+    for i, page in enumerate(reader.pages):
+        if (i + 1) in pages_to_extract:
+            writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=extraido.pdf"})
