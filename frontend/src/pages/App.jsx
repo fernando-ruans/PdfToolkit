@@ -13,6 +13,7 @@ import Compare from './Compare';
 import Watermark from './Watermark';
 import PageNum from './PageNum';
 import Reorder from './Reorder';
+import ReorderPages from './ReorderPages';
 import ExtractPages from './ExtractPages';
 import Remove from './Remove';
 import Rotate from './Rotate';
@@ -38,7 +39,7 @@ export default function App() {
           <Route path="/compare" element={<Compare />} />
           <Route path="/watermark" element={<Watermark />} />
           <Route path="/pagenum" element={<PageNum />} />
-          <Route path="/reorder" element={<Reorder />} />
+          <Route path="/reorder" element={<ReorderPages />} />
           <Route path="/extract" element={<ExtractPages />} />
           <Route path="/remove" element={<Remove />} />
           <Route path="/rotate" element={<Rotate />} />

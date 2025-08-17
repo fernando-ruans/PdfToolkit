@@ -1,3 +1,4 @@
+
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -431,3 +432,30 @@ async def extract_pages_pdf(
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=extraido.pdf"})
+
+# Endpoint para reorganizar páginas
+from fastapi.responses import StreamingResponse
+@app.post("/api/edit/reorder")
+async def reorder_pdf(
+    file: UploadFile = File(...),
+    order: str = Form(...)
+):
+    from PyPDF2 import PdfReader, PdfWriter
+    import json
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    try:
+        new_order = json.loads(order)
+        new_order = [int(p) for p in new_order]
+    except Exception as e:
+        print(f"[REORDER] Erro ao parsear ordem: {e}")
+        new_order = list(range(1, len(reader.pages)+1))
+    for page_num in new_order:
+        idx = page_num - 1
+        if 0 <= idx < len(reader.pages):
+            writer.add_page(reader.pages[idx])
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=reorganizado.pdf"})
