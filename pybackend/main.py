@@ -1,4 +1,3 @@
-
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -601,3 +600,42 @@ async def add_watermark(
     output_pdf.write(out_stream)
     out_stream.seek(0)
     return StreamingResponse(out_stream, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=watermarked.pdf"})
+
+# Endpoint para comparar PDFs
+@app.post("/api/edit/compare")
+async def compare_pdfs(file1: UploadFile = File(...), file2: UploadFile = File(...)):
+    from PyPDF2 import PdfReader
+    import difflib
+    pdf1_bytes = await file1.read()
+    pdf2_bytes = await file2.read()
+    reader1 = PdfReader(io.BytesIO(pdf1_bytes))
+    reader2 = PdfReader(io.BytesIO(pdf2_bytes))
+
+    # Extrai texto de cada página
+    def extract_text(reader):
+        return [page.extract_text() or "" for page in reader.pages]
+
+    text1 = extract_text(reader1)
+    text2 = extract_text(reader2)
+
+    # Compara número de páginas
+    pages1 = len(text1)
+    pages2 = len(text2)
+    page_diff = abs(pages1 - pages2)
+
+    # Compara texto página a página
+    diffs = []
+    for i in range(max(pages1, pages2)):
+        t1 = text1[i] if i < pages1 else ""
+        t2 = text2[i] if i < pages2 else ""
+        if t1 != t2:
+            diff = list(difflib.unified_diff(t1.splitlines(), t2.splitlines(), lineterm=""))
+            diffs.append({"page": i+1, "diff": diff})
+
+    result = {
+        "total_pages_pdf1": pages1,
+        "total_pages_pdf2": pages2,
+        "page_difference": page_diff,
+        "diffs": diffs,
+    }
+    return JSONResponse(content={"result": result})
