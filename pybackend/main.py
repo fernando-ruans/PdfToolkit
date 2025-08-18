@@ -1,4 +1,3 @@
-
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -218,15 +217,20 @@ from starlette.requests import Request
 
 
 # Servir assets do Vite em /assets
+
+# Servir assets do build Vite
 app.mount("/assets", StaticFiles(directory="../frontend/dist/assets"), name="assets")
-# Servir arquivos públicos do frontend (ex: pdf.worker.min.js)
+# Servir arquivos públicos (ex: pdf.worker.min.js, logo)
 app.mount("/public", StaticFiles(directory="../frontend/public"), name="public")
-app.mount("/", StaticFiles(directory="../frontend/public"), name="public-root")
+# Servir SPA do Vite (dist)
+app.mount("/dist", StaticFiles(directory="../frontend/dist"), name="dist")
 
 
 
 
 # Servir index.html em /
+
+# Endpoint raiz: serve index.html do build Vite
 @app.get("/", response_class=HTMLResponse)
 async def root():
     index_path = os.path.join(os.path.dirname(__file__), "../frontend/dist/index.html")
@@ -239,8 +243,8 @@ async def root():
 # Fallback: servir index.html para qualquer GET não-API
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def spa_fallback(full_path: str):
-    # Não intercepta APIs nem assets
-    if full_path.startswith("api/") or full_path.startswith("assets/"):
+    # Não intercepta APIs nem assets nem arquivos públicos
+    if full_path.startswith("api/") or full_path.startswith("assets/") or full_path.startswith("public/") or full_path.startswith("dist/"):
         return HTMLResponse(status_code=404, content="Not Found")
     index_path = os.path.join(os.path.dirname(__file__), "../frontend/dist/index.html")
     if os.path.exists(index_path):
@@ -460,3 +464,60 @@ async def reorder_pdf(
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=reorganizado.pdf"})
+
+# Endpoint para adicionar números de páginas
+from fastapi.responses import StreamingResponse
+@app.post("/api/edit/pagenum")
+async def add_page_numbers(
+    file: UploadFile = File(...),
+    position: str = Form("bottom-right"),
+    format: str = Form("Página {n}")
+):
+    from PyPDF2 import PdfReader, PdfWriter
+    from reportlab.pdfgen import canvas
+    import io
+    pdf_bytes = await file.read()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for i, page in enumerate(reader.pages):
+        packet = io.BytesIO()
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+        can = canvas.Canvas(packet, pagesize=(width, height))
+        # Determina posição do número
+        num_text = format.replace("{n}", str(i + 1))
+        font_size = 14
+        can.setFont("Helvetica", font_size)
+        margin = 20
+        x = margin
+        y = margin
+        if position == "bottom-right":
+            x = width - margin*2 - font_size*len(num_text)/2
+            y = margin
+        elif position == "bottom-center":
+            x = width/2 - font_size*len(num_text)/4
+            y = margin
+        elif position == "bottom-left":
+            x = margin
+            y = margin
+        elif position == "top-right":
+            x = width - margin*2 - font_size*len(num_text)/2
+            y = height - margin - font_size
+        elif position == "top-center":
+            x = width/2 - font_size*len(num_text)/4
+            y = height - margin - font_size
+        elif position == "top-left":
+            x = margin
+            y = height - margin - font_size
+        can.drawString(x, y, num_text)
+        can.save()
+        packet.seek(0)
+        from PyPDF2 import PdfReader as RLReader
+        num_pdf = RLReader(packet)
+        num_page = num_pdf.pages[0]
+        page.merge_page(num_page)
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=pdf_numerado.pdf"})

@@ -394,8 +394,8 @@ export default function PdfVisualEditor({ file, onSave }) {
   </div>
   {/* Área de edição centralizada com fundo quadriculado e sombra */}
       <div
-        className="flex-1 w-full flex justify-center items-center bg-gradient-to-br from-blue-50 via-white to-purple-50 py-6 px-2 overflow-auto"
-        style={{ minHeight: 600, height: '100%', minHeight: 0 }}
+  className="flex-1 w-full flex justify-center items-center bg-gradient-to-br from-blue-50 via-white to-purple-50 py-6 px-2 overflow-auto"
+  style={{ minHeight: 600, height: '100%' }}
       >
         <div className="relative rounded-2xl shadow-2xl border bg-[conic-gradient(at_top_left,_var(--tw-gradient-stops))] from-white via-blue-50 to-purple-50 p-2 flex" style={{ minWidth: 350, maxWidth: 950, width: '100%', height: '100%', minHeight: 0 }}>
           {/* Miniaturas de páginas */}
