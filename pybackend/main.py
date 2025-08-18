@@ -1,3 +1,4 @@
+
 # Imports principais (devem vir antes do uso do app)
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -521,3 +522,82 @@ async def add_page_numbers(
     writer.write(out)
     out.seek(0)
     return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=pdf_numerado.pdf"})
+
+# Endpoint para adicionar marca d'água (texto ou imagem)
+from fastapi.responses import StreamingResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from PyPDF2 import PdfReader, PdfWriter
+from PIL import Image
+
+@app.post("/api/edit/watermark")
+async def add_watermark(
+    file: UploadFile = File(...),
+    watermark_text: str = Form(None),
+    watermark_image: UploadFile = File(None),
+    position: str = Form("center"),
+    opacity: float = Form(0.2)
+):
+    # Salva PDF original
+    pdf_bytes = await file.read()
+    input_pdf = PdfReader(io.BytesIO(pdf_bytes))
+    output_pdf = PdfWriter()
+
+    # Validação: precisa de texto ou imagem
+    if not watermark_text and not watermark_image:
+        return JSONResponse(status_code=400, content={"error": "Envie texto ou imagem para marca d'água."})
+
+    # Cria marca d'água temporária
+    watermark_stream = io.BytesIO()
+    c = canvas.Canvas(watermark_stream, pagesize=letter)
+    width, height = letter
+
+    # Adiciona texto se fornecido
+    if watermark_text:
+        c.setFont("Helvetica", 40)
+        c.setFillAlpha(opacity)
+        x = width / 2
+        y = height / 2
+        if position == "top":
+            y = height - 100
+        elif position == "bottom":
+            y = 100
+        c.drawCentredString(x, y, watermark_text)
+
+    # Adiciona imagem se fornecida
+    if watermark_image:
+        img_bytes = await watermark_image.read()
+        img_stream = io.BytesIO(img_bytes)
+        img = Image.open(img_stream)
+        img_path = "_tmp_watermark_img.png"
+        img.save(img_path)
+        img_width, img_height = img.size
+        x = (width - img_width) / 2
+        y = (height - img_height) / 2
+        if position == "top":
+            y = height - img_height - 50
+        elif position == "bottom":
+            y = 50
+        c.saveState()
+        c.setFillAlpha(opacity)
+        c.drawImage(img_path, x, y, width=img_width, height=img_height, mask='auto')
+        c.restoreState()
+        os.remove(img_path)
+
+    c.showPage()  # Garante que uma página será criada
+    c.save()
+    watermark_stream.seek(0)
+
+    # Aplica marca d'água em cada página
+    watermark_pdf = PdfReader(watermark_stream)
+    if not watermark_pdf.pages:
+        return JSONResponse(status_code=400, content={"error": "Falha ao gerar página de marca d'água."})
+    watermark_page = watermark_pdf.pages[0]
+    for page in input_pdf.pages:
+        page.merge_page(watermark_page)
+        output_pdf.add_page(page)
+
+    out_stream = io.BytesIO()
+    output_pdf.write(out_stream)
+    out_stream.seek(0)
+    return StreamingResponse(out_stream, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=watermarked.pdf"})
