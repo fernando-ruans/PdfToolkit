@@ -1,3 +1,25 @@
+## Deploy em Heroku
+
+1. Crie um app no Heroku e conecte o repositório.
+2. Certifique-se de que o arquivo `Procfile` está presente na raiz de `pybackend`.
+3. O Heroku detecta o Python automaticamente e instala as dependências do `requirements.txt`.
+4. O comando de inicialização já está configurado no `Procfile`.
+5. Após o deploy, o backend estará disponível em uma URL pública.
+
+## Deploy em Render
+
+1. Crie um novo serviço web no Render e aponte para o repositório.
+2. Configure o comando de inicialização para:
+   ```sh
+   bash start.sh
+   ```
+3. O Render detecta o Python e instala as dependências do `requirements.txt`.
+4. O backend ficará disponível em uma URL pública.
+
+## Observações para integração com o frontend (Vercel)
+
+- No frontend, configure as URLs das requisições para apontar para o backend hospedado (Heroku ou Render).
+- Certifique-se de que o backend aceita CORS do domínio do frontend.
 
 # PDF Toolkit - Backend Python (FastAPI)
 

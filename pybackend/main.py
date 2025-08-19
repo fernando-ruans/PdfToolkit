@@ -219,11 +219,11 @@ from starlette.requests import Request
 # Servir assets do Vite em /assets
 
 # Servir assets do build Vite
-app.mount("/assets", StaticFiles(directory="../frontend/dist/assets"), name="assets")
+app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 # Servir arquivos públicos (ex: pdf.worker.min.js, logo)
-app.mount("/public", StaticFiles(directory="../frontend/public"), name="public")
+app.mount("/public", StaticFiles(directory="public"), name="public")
 # Servir SPA do Vite (dist)
-app.mount("/dist", StaticFiles(directory="../frontend/dist"), name="dist")
+app.mount("/dist", StaticFiles(directory="dist"), name="dist")
 
 
 
@@ -233,7 +233,7 @@ app.mount("/dist", StaticFiles(directory="../frontend/dist"), name="dist")
 # Endpoint raiz: serve index.html do build Vite
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    index_path = os.path.join(os.path.dirname(__file__), "../frontend/dist/index.html")
+    index_path = os.path.join(os.path.dirname(__file__), "dist/index.html")
     if os.path.exists(index_path):
         with open(index_path, encoding="utf-8") as f:
             return HTMLResponse(f.read(), status_code=200)
@@ -246,7 +246,7 @@ async def spa_fallback(full_path: str):
     # Não intercepta APIs nem assets nem arquivos públicos
     if full_path.startswith("api/") or full_path.startswith("assets/") or full_path.startswith("public/") or full_path.startswith("dist/"):
         return HTMLResponse(status_code=404, content="Not Found")
-    index_path = os.path.join(os.path.dirname(__file__), "../frontend/dist/index.html")
+    index_path = os.path.join(os.path.dirname(__file__), "dist/index.html")
     if os.path.exists(index_path):
         with open(index_path, encoding="utf-8") as f:
             return HTMLResponse(f.read(), status_code=200)
